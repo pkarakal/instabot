@@ -1,7 +1,10 @@
+from http.cookiejar import CookieJar
 import requests
 import json
 from datetime import datetime
-import requests_html
+import sys
+import traceback
+import secrets
 
 
 class Instagram:
@@ -111,11 +114,58 @@ class Instagram:
 
             session.close()
 
-            return self.session
+            return self.session, self.cookies.get_dict()
         session.close()
         raise Exception(login_response.text)
 
+    def post_comment(self, post_id, comment, token, cookie_jar: CookieJar = None):
+        """
+        This uses the Instagram Web API to post a comment to an IG Media.
+        It constructs the correct url to post the data to, by setting the
+        correct ig media id to a string. It then constructs the HTTP request
+        headers and the data object. It finally uses requests to post the
+        comment to Instagram. When an error is raised it outputs the stack
+        trace to the standard output.
+        :param post_id: an int that contains the ig media id
+        :param comment: a str that contains the comment to post
+        :param token: a str containing the csrf token
+        :param cookie_jar: a CookieJar object. If None, it uses session.cookies
+        :return: None
+        """
+        self.url = f"https://www.instagram.com/web/comments/{post_id}/add/"
+        headers = {
+            'Accept': '*/*',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'X-CSRFToken': f'{token}',
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Origin': 'https://www.instagram.com',
+            'Connection': 'keep-alive',
+        }
+        data = f"comment_text={comment}"
+        try:
+            requests.request("POST", self.url, data=data, headers=headers,
+                             cookies=cookie_jar if cookie_jar is not None else self.cookies)
+        except Exception as e:
+            print(e)
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            traceback.print_exception(exc_type, exc_value, exc_traceback)
+
+    def randomizeTags(self, number_of_tags: int = 3):
+        """
+        Given a int select random items from self.tags list
+        using system randomness.
+        :param number_of_tags:
+        :return:
+        """
+        if self.tags is not None and number_of_tags < len(self.tags):
+            sys_rand = secrets.SystemRandom()
+            return sys_rand.sample(self.tags, number_of_tags)
+        return None
+
 
 if __name__ == "__main__":
-    insta = Instagram()
-    res = insta.login("username", "password")
+    insta = Instagram(tag_list=['@lorem', '@ipsum', '@dolor', '@sit', '@emet'])
+    _comment = " ".join(insta.randomizeTags(2))
+    _session, cookie = insta.login("username", "password")
+    insta.post_comment(post_id=1234, comment=_comment, token=_session.get('csrf_token'))
