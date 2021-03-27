@@ -1,6 +1,6 @@
 from optparse import OptionParser
 import sys
-from ParameterException import ParameterException
+from instabot.ParameterException import ParameterException
 import yaml
 
 
@@ -15,6 +15,8 @@ class Parser:
         self.parser.add_option("-n", "--number-of-tags", dest="number_of_tags",
                                help="define the number of tags you want in each comment")
         self.parser.add_option("-f", "--file", dest="file", help="define the yaml file to read parameters from")
+        self.parser.add_option("-u", "--username", dest="username", help="define your username")
+        self.parser.add_option("-p", "--password", dest="password", help="define your password")
 
     def parseCLI(self, arguments=None):
         if arguments is None:
