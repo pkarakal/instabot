@@ -1,0 +1,171 @@
+from http.cookiejar import CookieJar
+import requests
+import json
+from datetime import datetime
+import sys
+import traceback
+import secrets
+
+
+class Instagram:
+    """
+    A class used to represent an Instagram Web client
+
+    ...
+    Attributes
+    ----------
+    cookies: CookieJar
+        a CookieJar object containing the cookies received
+        and generated from instagram. Most notable cookie is
+        csrf token used to identify the user, and session_id
+    session: dict
+        a dictionary containing the csrf token and session id
+        in human readable form, after proper json decoding and
+        obtaining keys from the cookies object
+    tags: list
+        a list containing the usernames to include in the comments
+    token: str
+        a string that contains the csrf token if present in advance
+    url: str
+        a string that contains the endpoint to post the comment to
+
+    Methods
+    -------
+    load(session)
+        Loads a ready session in place of the existing one
+    login(username, password)
+        Uses the Instagram Web API to login the user and returns
+        a tuple containing the session and the cookies.
+    post_comment(post_id, comment, token, cookie_jar=None)
+        Given a comment, post it to the correct endpoint using
+        the Instagram Web API
+    """
+    def __init__(self, tag_list: list, authentication_token=None):
+        """
+        Initializes the Instagram object
+        :param tag_list: a list that contains the usernames to
+            include in the comments
+        :param authentication_token: a string containing a pre-existing
+            instagram csrf token.
+        """
+        self.cookies = None
+        self.session = None
+        self.tags = tag_list
+        self.token = authentication_token
+        self.url = None
+
+    def load(self, existing_session):
+        self.session = existing_session
+
+    def login(self, username: str, password: str) -> tuple:
+        """
+        This uses the Instagram Web API to login to instagram
+        It makes a get request to the base instagram url to get
+        an initial csrf token, so that is can proceed to the login.
+        Note that `ig_cb` cookie is in place to make sure that cookies
+        are accepted in the 'browser'. Then it encrypts the password
+        in the same way it is encrypted on the web app. Finally, it posts
+        to Instagram backend to get authenticated and updates the csrf
+        token and the session id of the current session. It returns a dict
+        containing the session and the cookies
+        :param username: a string that contains the user's ig handle
+        :param password: a string that contains the user's ig password
+        :return: tuple containing a dict with csrf token and session id and
+            the response cookies.
+        """
+        base_url = 'https://www.instagram.com/'
+        url = base_url + 'accounts/login/'
+        login_url = url + 'ajax/'
+        USER_AGENT = 'Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:86.0) Gecko/20100101 Firefox/86.0'
+
+        time = int(datetime.now().timestamp())
+
+        session = requests.Session()
+        session.cookies.set("ig_cb", "2")
+        session.headers = {'user-agent': USER_AGENT}
+        session.headers.update({'Referer': base_url})
+
+        response = session.get(base_url)
+        csrftoken = None
+
+        for key in response.cookies.keys():
+            if key == 'csrftoken':
+                csrftoken = session.cookies['csrftoken']
+        session.headers.update({'X-CSRFToken': csrftoken})
+        payload = {
+            'username': username,
+            'enc_password': f'#PWD_INSTAGRAM_BROWSER:0:{time}:{password}',
+            'queryParams': {},
+            'optIntoOneTap': 'false'
+        }
+
+        login_response = session.post(login_url, data=payload, allow_redirects=True)
+        session.headers.update({'X-CSRFToken': login_response.cookies['csrftoken']})
+        json_data = json.loads(login_response.text)
+
+        if json_data["authenticated"]:
+            self.cookies = login_response.cookies
+            cookie_jar = self.cookies.get_dict()
+
+            self.session = {
+                "csrf_token": cookie_jar['csrftoken'],
+                "session_id": cookie_jar['sessionid']
+            }
+
+            session.close()
+
+            return self.session, self.cookies.get_dict()
+        session.close()
+        raise Exception(login_response.text)
+
+    def post_comment(self, post_id, comment, token, cookie_jar: CookieJar = None):
+        """
+        This uses the Instagram Web API to post a comment to an IG Media.
+        It constructs the correct url to post the data to, by setting the
+        correct ig media id to a string. It then constructs the HTTP request
+        headers and the data object. It finally uses requests to post the
+        comment to Instagram. When an error is raised it outputs the stack
+        trace to the standard output.
+        :param post_id: an int that contains the ig media id
+        :param comment: a str that contains the comment to post
+        :param token: a str containing the csrf token
+        :param cookie_jar: a CookieJar object. If None, it uses session.cookies
+        :return: None
+        """
+        self.url = f"https://www.instagram.com/web/comments/{post_id}/add/"
+        headers = {
+            'Accept': '*/*',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'X-CSRFToken': f'{token}',
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Origin': 'https://www.instagram.com',
+            'Connection': 'keep-alive',
+        }
+        data = f"comment_text={comment}"
+        try:
+            requests.request("POST", self.url, data=data, headers=headers,
+                             cookies=cookie_jar if cookie_jar is not None else self.cookies)
+        except Exception as e:
+            print(e)
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            traceback.print_exception(exc_type, exc_value, exc_traceback)
+
+    def randomizeTags(self, number_of_tags: int = 3):
+        """
+        Given a int select random items from self.tags list
+        using system randomness.
+        :param number_of_tags:
+        :return:
+        """
+        if self.tags is not None and number_of_tags < len(self.tags):
+            sys_rand = secrets.SystemRandom()
+            return sys_rand.sample(self.tags, number_of_tags)
+        return None
+
+
+if __name__ == "__main__":
+    insta = Instagram(tag_list=['@lorem', '@ipsum', '@dolor', '@sit', '@emet'])
+    _comment = " ".join(insta.randomizeTags(2))
+    _session, cookie = insta.login("username", "password")
+    insta.post_comment(post_id=1234, comment=_comment, token=_session.get('csrf_token'))
