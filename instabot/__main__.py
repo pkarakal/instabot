@@ -9,4 +9,6 @@ if __name__ == "__main__":
         insta = Instagram(cli.get('tags'))
         (session, cookies) = insta.login(cli.get('username'), cli.get('password'))
         insta.post_comment(post_id=cli.get('post-id')[0], token=session.get('csrf_token'),
-                           comment=" ".join(insta.randomizeTags(int(cli.get('number-of-tags')))))
+                           comment=" ".join(insta.randomizeTags(
+                               int(cli.get('number-of-tags')) if cli.get('number-of-tags') is not None else cli.get(
+                                   'number_of_tags'))))
