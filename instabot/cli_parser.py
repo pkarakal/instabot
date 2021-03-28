@@ -28,7 +28,7 @@ class Parser:
                     return yaml.safe_load(file)
                 except yaml.YAMLError as exc:
                     print(exc)
-        return options
+        return vars(options)
 
 
 if __name__ == "__main__":
