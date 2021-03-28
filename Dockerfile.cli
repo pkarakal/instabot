@@ -1,0 +1,9 @@
+FROM python:latest
+
+WORKDIR /
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+COPY . /
+
+CMD [ "python", "-m", "instabot", "-u", "username", "-p", "password", "-i", "1234", "-t", "@lorem", "@ipsum", "@dolor", "@emet", "-n", "2"]
