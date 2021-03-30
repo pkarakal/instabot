@@ -1,0 +1,14 @@
+---
+post_id:
+  - 1234567890111213
+tags:
+  - "@test1"
+  - "@test2"
+  - "@this.is.a.test"
+  - "@lorem"
+  - "@ipsum"
+number_of_tags: 2
+username: user
+password: password
+run_until: 'YYYY-MM-DD HH:mm:ss'
+comments_per_day: 500
