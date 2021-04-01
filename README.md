@@ -1,3 +1,6 @@
+<p align="center">
+    <img alt="instabot" src="assets/instabot.png" width="190">
+</p>
 <h1 align="center">instabot</h1>
 
 This is an experimental Instagram bot created to be used to help users tag
@@ -41,7 +44,7 @@ If you choose to run this in a container, follow the instructions below.
    ```
 *  Create and run the container
    ```shell
-  $ docker run --name instabot -d instabot:latest
+   $ docker run --name instabot -d instabot:latest
    ```
 *  If you choose to go with cli arguments, just build the dockerfile with cli using
    ```shell
@@ -49,5 +52,5 @@ If you choose to run this in a container, follow the instructions below.
    ```
 *  Create and run the container
    ```shell
-  $ docker run --name instabot -d instabot:latest python -m instabot [ARGS]
+   $ docker run --name instabot -d instabot:latest python -m instabot [ARGS]
    ```
