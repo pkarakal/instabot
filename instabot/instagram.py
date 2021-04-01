@@ -1,10 +1,13 @@
 from http.cookiejar import CookieJar
+from datetime import datetime, timedelta
+from time import sleep
+from instabot.SpamDetectedException import SpamDetectedException
 import requests
 import json
-from datetime import datetime
 import sys
 import traceback
 import secrets
+import re
 
 
 class Instagram:
@@ -118,17 +121,21 @@ class Instagram:
         session.close()
         raise Exception(login_response.text)
 
-    def post_comment(self, post_id, comment, token, cookie_jar: CookieJar = None):
+    def post_comment(self, post_id, comment, token, run_until: datetime = None,
+                     comments_per_day: int = 500, cookie_jar: CookieJar = None):
         """
         This uses the Instagram Web API to post a comment to an IG Media.
         It constructs the correct url to post the data to, by setting the
         correct ig media id to a string. It then constructs the HTTP request
         headers and the data object. It finally uses requests to post the
-        comment to Instagram. When an error is raised it outputs the stack
-        trace to the standard output.
+        comment to Instagram. This runs until the datetime specified and posts
+        a specified number of comments per day. When an error is raised it
+        outputs the stack trace to the standard output.
         :param post_id: an int that contains the ig media id
         :param comment: a str that contains the comment to post
         :param token: a str containing the csrf token
+        :param run_until: a datetime object that specifies the datetime to stop execution
+        :param comments_per_day: an integer that indicates the number of comments to post per day
         :param cookie_jar: a CookieJar object. If None, it uses session.cookies
         :return: None
         """
@@ -144,8 +151,35 @@ class Instagram:
         }
         data = f"comment_text={comment}"
         try:
-            requests.request("POST", self.url, data=data, headers=headers,
-                             cookies=cookie_jar if cookie_jar is not None else self.cookies)
+            if run_until is not None:
+                while (run_until - datetime.now()).total_seconds() >= 0:
+                    response = requests.request("POST", self.url, data=data, headers=headers,
+                                                cookies=cookie_jar if cookie_jar is not None else self.cookies)
+                    # create a regex to find dates in YYYY-MM-DD format in the response.
+                    # if found and the day difference is less than 7 days, sleep until then.
+                    # else throw SpamDetected Exception. This can happen even when status code is 200.
+                    regex_date = re.compile(r"\d{4}-(0?[1-9]|1[012])-(0?[1-9]|[12][0-9]|3[01])")
+                    matches_date = regex_date.search(response.text)
+                    if matches_date is not None:
+                        date = datetime.fromisoformat(matches_date.group(0)) + timedelta(days=1)
+                        diff = date - datetime.now()
+                        if diff.days < 7:
+                            sleep(diff.total_seconds())
+                        else:
+                            raise SpamDetectedException(matches_date.group(0))
+                    # usually when a heavy activity is detected and spam is not detected, the response
+                    # code is 429 and response message is the one in the regex below. If found, sleep
+                    # for 5 minutes and continue program execution.
+                    if response.status_code != 200:
+                        regex = re.compile(r"^Please wait a few minutes before you try again.$")
+                        matches = regex.search(response.text)
+                        if matches is not None:
+                            sleep(300)
+                    # to reach the specified number of comments per day, divide that number by seconds in a day
+                    sleep(comments_per_day/24*60)
+            else:
+                requests.request("POST", self.url, data=data, headers=headers,
+                                 cookies=cookie_jar if cookie_jar is not None else self.cookies)
         except Exception as e:
             print(e)
             exc_type, exc_value, exc_traceback = sys.exc_info()
