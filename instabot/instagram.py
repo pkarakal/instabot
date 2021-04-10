@@ -1,3 +1,4 @@
+import logging
 from http.cookiejar import CookieJar
 from datetime import datetime, timedelta
 from time import sleep
@@ -31,6 +32,8 @@ class Instagram:
         a string that contains the csrf token if present in advance
     url: str
         a string that contains the endpoint to post the comment to
+    logger: logger
+        a logger object used to log activities to file
 
     Methods
     -------
@@ -43,19 +46,21 @@ class Instagram:
         Given a comment, post it to the correct endpoint using
         the Instagram Web API
     """
-    def __init__(self, tag_list: list, authentication_token=None):
+    def __init__(self, tag_list: list, authentication_token=None, logger: logging.Logger = None):
         """
         Initializes the Instagram object
         :param tag_list: a list that contains the usernames to
             include in the comments
         :param authentication_token: a string containing a pre-existing
             instagram csrf token.
+        :param logger: a logger object
         """
         self.cookies = None
         self.session = None
         self.tags = tag_list
         self.token = authentication_token
         self.url = None
+        self.logger = logger
 
     def load(self, existing_session):
         self.session = existing_session
@@ -116,6 +121,10 @@ class Instagram:
             }
 
             session.close()
+            if self.logger is not None:
+                self.logger.debug("Log in was successful and token was obtained")
+            else:
+                print("Log in was successful and token was obtained")
 
             return self.session, self.cookies.get_dict()
         session.close()
@@ -164,9 +173,12 @@ class Instagram:
                         date = datetime.fromisoformat(matches_date.group(0)) + timedelta(days=1)
                         diff = date - datetime.now()
                         if diff.days < 7:
+                            self.log("Spam Detected. Sleeping for " + str(diff.total_seconds()))
                             sleep(diff.total_seconds())
                         else:
-                            raise SpamDetectedException(matches_date.group(0))
+                            spam = SpamDetectedException(matches_date.group(0))
+                            self.critical("Spam Detected Exception. Exiting", spam)
+                            raise spam
                     # usually when a heavy activity is detected and spam is not detected, the response
                     # code is 429 and response message is the one in the regex below. If found, sleep
                     # for 5 minutes and continue program execution.
@@ -174,14 +186,16 @@ class Instagram:
                         regex = re.compile(r"^Please wait a few minutes before you try again.$")
                         matches = regex.search(response.text)
                         if matches is not None:
+                            self.log("Sleeping for 300s")
                             sleep(300)
                     # to reach the specified number of comments per day, divide that number by seconds in a day
-                    sleep(comments_per_day/24*60)
+                    self.log("Sleeping for " + str(comments_per_day/(24*60)) + "s")
+                    sleep(comments_per_day/(24*60))
             else:
                 requests.request("POST", self.url, data=data, headers=headers,
                                  cookies=cookie_jar if cookie_jar is not None else self.cookies)
         except Exception as e:
-            print(e)
+            self.critical("Critical exception thrown", e)
             exc_type, exc_value, exc_traceback = sys.exc_info()
             traceback.print_exception(exc_type, exc_value, exc_traceback)
 
@@ -196,6 +210,24 @@ class Instagram:
             sys_rand = secrets.SystemRandom()
             return sys_rand.sample(self.tags, number_of_tags)
         return None
+
+    def log(self, message: str):
+        if self.logger is not None:
+            self.logger.debug(message)
+        else:
+            print(message)
+
+    def error(self, message: str, error: Exception):
+        if self.logger is not None:
+            self.logger.error(message, error)
+        else:
+            print(message, error)
+
+    def critical(self, message: str, error: Exception):
+        if self.logger is not None:
+            self.logger.critical(message, error)
+        else:
+            print(message, error)
 
 
 if __name__ == "__main__":
