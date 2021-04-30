@@ -7,7 +7,17 @@ tags:
   - "@this.is.a.test"
   - "@lorem"
   - "@ipsum"
+emojis:
+  - "👌"
+  - "💣"
+  - "🖤"
+  - "😍"
+  - "😝"
+  - "🤞"
+  - "🔥"
+  - "🍻"
 number_of_tags: 2
+number_of_emojis: 2
 username: user
 password: password
 run_until: 'YYYY-MM-DD HH:mm:ss'
