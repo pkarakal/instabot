@@ -28,6 +28,8 @@ class Instagram:
         obtaining keys from the cookies object
     tags: list
         a list containing the usernames to include in the comments
+    emojis: list
+        a list containing the usernames to include in the comments
     token: str
         a string that contains the csrf token if present in advance
     url: str
@@ -46,11 +48,19 @@ class Instagram:
         Given a comment, post it to the correct endpoint using
         the Instagram Web API
     """
-    def __init__(self, tag_list: list, authentication_token=None, logger: logging.Logger = None):
+
+    def __init__(self, tag_list: list, emojis: list, number_of_tags: int, number_of_emojis:int,
+                 authentication_token=None, logger: logging.Logger = None):
         """
         Initializes the Instagram object
         :param tag_list: a list that contains the usernames to
             include in the comments
+        :param emojis: a list that contains the usernames to
+            include in the comments
+        :param number_of_tags: a number that indicates the
+            the number of people to tag in a post
+        :param number_of_emojis: a number that indicates the
+            the number of emojis to put in a comment
         :param authentication_token: a string containing a pre-existing
             instagram csrf token.
         :param logger: a logger object
@@ -58,6 +68,9 @@ class Instagram:
         self.cookies = None
         self.session = None
         self.tags = tag_list
+        self.emojis = emojis
+        self.number_of_tags = number_of_tags
+        self.number_of_emojis = number_of_emojis
         self.token = authentication_token
         self.url = None
         self.logger = logger
@@ -162,8 +175,9 @@ class Instagram:
         try:
             if run_until is not None:
                 while (run_until - datetime.now()).total_seconds() >= 0:
-                    response = requests.request("POST", self.url, data=data, headers=headers,
+                    response = requests.request("POST", self.url, data=data.encode('utf-8'), headers=headers,
                                                 cookies=cookie_jar if cookie_jar is not None else self.cookies)
+                    self.log(str(response.status_code) + " " + response.text)
                     # create a regex to find dates in YYYY-MM-DD format in the response.
                     # if found and the day difference is less than 7 days, sleep until then.
                     # else throw SpamDetected Exception. This can happen even when status code is 200.
@@ -189,8 +203,10 @@ class Instagram:
                             self.log("Sleeping for 300s")
                             sleep(300)
                     # to reach the specified number of comments per day, divide that number by seconds in a day
-                    self.log("Sleeping for " + str(comments_per_day/(24*60)) + "s")
-                    sleep(comments_per_day/(24*60))
+                    self.log("Sleeping for " + str(comments_per_day / (24 * 60)) + "s")
+                    sleep(comments_per_day / (24 * 60))
+                    new_comment = (" ".join(self.randomizeTags(self.number_of_tags)))
+                    data = f"comment_text={new_comment}"
             else:
                 requests.request("POST", self.url, data=data, headers=headers,
                                  cookies=cookie_jar if cookie_jar is not None else self.cookies)
@@ -209,6 +225,18 @@ class Instagram:
         if self.tags is not None and number_of_tags < len(self.tags):
             sys_rand = secrets.SystemRandom()
             return sys_rand.sample(self.tags, number_of_tags)
+        return None
+
+    def randomizeEmojis(self, number_of_emojis: int = 2):
+        """
+            Given a int select random items from self.tags list
+            using system randomness.
+            :param number_of_emojis:
+            :return:
+        """
+        if self.emojis is not None and number_of_emojis < len(self.tags):
+            sys_rand = secrets.SystemRandom()
+            return sys_rand.sample(self.emojis, number_of_emojis)
         return None
 
     def log(self, message: str):
@@ -232,6 +260,6 @@ class Instagram:
 
 if __name__ == "__main__":
     insta = Instagram(tag_list=['@lorem', '@ipsum', '@dolor', '@sit', '@emet'])
-    _comment = " ".join(insta.randomizeTags(2))
+    _comment = " ".join(insta.randomizeTags(2)).join(insta.randomizeEmojis(2))
     _session, cookie = insta.login("username", "password")
     insta.post_comment(post_id=1234, comment=_comment, token=_session.get('csrf_token'))

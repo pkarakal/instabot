@@ -20,6 +20,11 @@ class Parser:
                                                                        "execution")
         self.parser.add_option("-c", "--comments", dest="comments_per_day", help="define how many comments "
                                                                                  "per day to post")
+        self.parser.add_option("-e", "--emojis", dest="emojis", action="append", help="define the emojis to add the "
+                                                                                      "comment")
+        self.parser.add_option("-m", "--emojinum", dest="number_of_emojis", action="append", help="define the number "
+                                                                                                  "of emojis to add "
+                                                                                                  "to the comment")
 
     def parseCLI(self, arguments=None):
         if arguments is None:
