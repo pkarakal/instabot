@@ -30,6 +30,10 @@ class Instagram:
         a list containing the usernames to include in the comments
     emojis: list
         a list containing the usernames to include in the comments
+    number_of_tags: a number that indicates the
+        the number of people to tag in a post
+    number_of_emojis: a number that indicates the
+        the number of emojis to put in a comment
     token: str
         a string that contains the csrf token if present in advance
     url: str
@@ -47,6 +51,13 @@ class Instagram:
     post_comment(post_id, comment, token, cookie_jar=None)
         Given a comment, post it to the correct endpoint using
         the Instagram Web API
+    randomizeTags(number_of_tags: int)
+        Given a an integer n, randomize the list of tags and
+        select n. Default value is 3
+    randomizeEmojis(number_of_tags: int)
+        Given a an integer n, randomize the list of emojis and
+        select n. Default value is 2
+
     """
 
     def __init__(self, tag_list: list, emojis: list, number_of_tags: int, number_of_emojis:int,
@@ -205,7 +216,7 @@ class Instagram:
                     # to reach the specified number of comments per day, divide that number by seconds in a day
                     self.log("Sleeping for " + str(comments_per_day / (24 * 60)) + "s")
                     sleep(comments_per_day / (24 * 60))
-                    new_comment = (" ".join(self.randomizeTags(self.number_of_tags)))
+                    new_comment = (" ".join(self.randomizeTags(self.number_of_tags)) + " " + " ".join(self.randomizeEmojis(self.number_of_emojis)))
                     data = f"comment_text={new_comment}"
             else:
                 requests.request("POST", self.url, data=data, headers=headers,
