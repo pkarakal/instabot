@@ -1,0 +1,48 @@
+---
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-20.04, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build Application
+        run: |
+          make
+      - name: Archive build artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: artifacts
+          path: ./dist/**
+
+  create_release:
+    runs-on: ubuntu-20.04
+    needs: [ build ]
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v1
+        with:
+          name: artifacts
+      - name: Prepare items for release
+        run: |
+          mv artifacts/Darwin/instabot artifacts/Darwin/instabot-mac
+          mv artifacts/Linux/instabot artifacts/Linux/instabot-linux
+          tar -czvf artifacts/instabot-windows.tar.gz artifacts/Windows/instabot
+      - name: Create release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+        with:
+          files: |
+            artifacts/Darwin/instabot-mac
+            artifacts/Linux/instabot-linux
+            artifacts/instabot-windows.tar.gz
+          tag_name: ${{ github.ref }}
+          draft: true
