@@ -11,8 +11,7 @@ if __name__ == "__main__":
         termination = cli.get('run_until')
         termination_date = datetime.fromisoformat(termination)
         comments_per_day = cli.get('comments_per_day') or 500
-        insta = Instagram(cli.get('tags'), cli.get('emojis'), cli.get('number_of_tags'), cli.get('number_of_emojis'),
-                          logger=default_logger)
+        insta = Instagram(cli.get('tags'), logger=default_logger)
         (session, cookies) = insta.login(cli.get('username'), cli.get('password'))
         insta.post_comment(post_id=cli.get('post_id')[0], token=session.get('csrf_token'),
                            comment=" ".join(insta.randomizeTags(
