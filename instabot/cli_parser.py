@@ -2,6 +2,8 @@ from optparse import OptionParser
 import sys
 from instabot.ParameterException import ParameterException
 import yaml
+from chardet import detect
+import os
 
 
 class Parser:
@@ -36,7 +38,27 @@ class Parser:
                     return yaml.safe_load(file)
                 except yaml.YAMLError as exc:
                     print(exc)
+                except UnicodeDecodeError:
+                    from_codec = get_encoding_type(options.file)
+                    target_file = f"{options.file}.tmp"
+                    try:
+                        with open(options.file, 'r', encoding=from_codec) as f, open(target_file, 'w', encoding='utf-8') as e:
+                            text = f.read()
+                            e.write(text)
+                        os.remove(options.file)
+                        os.rename(target_file, options.file)
+                        return yaml.safe_load(options.file)
+                    except UnicodeDecodeError:
+                        print('Decode Error')
+                    except UnicodeEncodeError:
+                        print('Encode Error')
         return vars(options)
+
+
+def get_encoding_type(file):
+    with open(file, 'rb') as f:
+        rawdata = f.read()
+    return detect(rawdata)['encoding']
 
 
 if __name__ == "__main__":
