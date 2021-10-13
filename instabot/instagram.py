@@ -1,8 +1,15 @@
+import base64
 import logging
 from http.cookiejar import CookieJar
 from datetime import datetime, timedelta
 from time import sleep
 from instabot.SpamDetectedException import SpamDetectedException
+from instabot.utils import select_agent
+from Crypto import Random
+from Crypto.Cipher import AES
+from nacl.public import PublicKey, SealedBox
+import struct
+import binascii
 import requests
 import json
 import sys
@@ -108,31 +115,48 @@ class Instagram:
         base_url = 'https://www.instagram.com/'
         url = base_url + 'accounts/login/'
         login_url = url + 'ajax/'
-        USER_AGENT = 'Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:86.0) Gecko/20100101 Firefox/86.0'
+        USER_AGENT = select_agent()
 
         time = int(datetime.now().timestamp())
 
         session = requests.Session()
         session.cookies.set("ig_cb", "2")
-        session.headers = {'user-agent': USER_AGENT}
+        session.headers = {'user-agent': USER_AGENT, 'origin': base_url}
         session.headers.update({'Referer': base_url})
 
         response = session.get(base_url)
         csrftoken = None
+        login_headers = {
+            'User-Agent': USER_AGENT,
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Origin': base_url,
+            'Referer': url,
+        }
 
         for key in response.cookies.keys():
             if key == 'csrftoken':
                 csrftoken = session.cookies['csrftoken']
-        session.headers.update({'X-CSRFToken': csrftoken})
+                login_headers.update('x-csrftoken', csrftoken)
+        key_id, public_key, version = self._get_encryption_key(session)
+        encrypted_password = password
+        if key_id is not None and public_key is not None:
+            encrypted_password = self._generate_enc_password(time, key_id,
+                                                             public_key,
+                                                             password)
+        login_headers.update({'X-CSRFToken': session.cookies.get('csrftoken')})
+        # TODO: update payload to use encrypted password
         payload = {
             'username': username,
             'enc_password': f'#PWD_INSTAGRAM_BROWSER:0:{time}:{password}',
             'queryParams': {},
-            'optIntoOneTap': 'false'
+            'optIntoOneTap': 'false',
+            'stopDeletionNonce: ': '',
+            'trustedDeviceRecords': {}
         }
 
-        login_response = session.post(login_url, data=payload, allow_redirects=True)
-        session.headers.update({'X-CSRFToken': login_response.cookies['csrftoken']})
+        login_response = session.post(login_url, headers=login_headers, data=payload, allow_redirects=True)
+        # session.headers.update({'X-CSRFToken': login_response.cookies['csrftoken']})
         json_data = json.loads(login_response.text)
 
         if json_data["authenticated"]:
@@ -153,6 +177,49 @@ class Instagram:
             return self.session, self.cookies.get_dict()
         session.close()
         raise Exception(login_response.text)
+
+    # TODO: update method so that login passes
+    def _generate_enc_password(self, time: int, key_id: int, pub_key: str, password: str) -> str:
+        key = Random.get_random_bytes(32)
+        iv = Random.get_random_bytes(12)
+
+        time = int(datetime.now().timestamp())
+
+        aes = AES.new(key, AES.MODE_GCM, nonce=iv, mac_len=16)
+        aes.update(str(time).encode('utf-8'))
+        encrypted_password, cipher_tag = aes.encrypt_and_digest(password.encode('utf-8'))
+
+        pub_key_bytes = binascii.unhexlify(pub_key)
+        seal_box = SealedBox(PublicKey(pub_key_bytes))
+        encrypted_key = seal_box.encrypt(key)
+
+        encrypted = bytes([1,
+                           int(key_id),
+                           *list(struct.pack('<h', len(encrypted_key))),
+                           *list(encrypted_key),
+                           *list(cipher_tag),
+                           *list(encrypted_password)])
+        return base64.b64encode(encrypted).decode('utf-8')
+
+    def _get_encryption_key(self, session: requests.Session):
+        base_url = "https://www.instagram.com"
+        url = base_url + "/data/shared_data/"
+        session.headers = {'user-agent': select_agent(),
+                           'accept-langauge': 'en-US;q=0.9,en;q=0.8,es;q=0.7',
+                           'origin': 'https://www.instagram.com',
+                           'upgrade-insecure-requests': '1',
+                           'accept': '*/*',
+                           'accept-encoding': 'gzip, deflate, br',
+                           'x-requested-with': 'XMLHttpRequest', }
+        session.headers.update({'Referer': base_url})
+        response = session.get(url)
+        json_data = json.loads(response.text)
+        if json_data["encryption"]:
+            if json_data["config"]["csrf_token"]:
+                session.headers.update({'X-CSRFToken': json_data["config"]["csrf_token"]})
+                session.cookies.set('csrftoken', json_data["config"]["csrf_token"])
+            return json_data["encryption"]["key_id"], json_data["encryption"]["public_key"], json_data["encryption"]["version"]
+        return None, None, None
 
     def post_comment(self, post_id, comment, token, run_until: datetime = None,
                      comments_per_day: int = 500, cookie_jar: CookieJar = None):
